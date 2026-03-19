@@ -1,10 +1,5 @@
 {
   "version": 2,
-  "functions": {
-    "api/showcase-feed.js": {
-      "maxDuration": 15
-    }
-  },
   "rewrites": [
     { "source": "/showcase-feed.xml", "destination": "/api/showcase-feed" }
   ]
