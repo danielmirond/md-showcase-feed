@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MD Showcase Feed — Mundo Deportivo</title>
+  <link rel="alternate" type="application/rss+xml" title="Mundo Deportivo — Google Showcase" href="/showcase-feed.xml">
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 60px auto; padding: 0 24px; color: #111; }
+    h1 { font-size: 1.4rem; }
+    code { background: #f4f4f4; padding: 2px 6px; border-radius: 4px; font-size: .9em; }
+    a { color: #c00; }
+    .status { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 16px; margin: 24px 0; }
+    pre { background: #f4f4f4; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: .85em; }
+  </style>
+</head>
+<body>
+  <h1>🗞️ Mundo Deportivo — Google News Showcase Feed</h1>
+
+  <div class="status" id="status">
+    <strong>⏳ Cargando estado del feed…</strong>
+  </div>
+
+  <p>Feed RSS activo en: <a href="/showcase-feed.xml"><code>/showcase-feed.xml</code></a></p>
+
+  <h2>Registro del último build</h2>
+  <pre id="build-log">Cargando…</pre>
+
+  <script>
+    fetch('/last-build.json')
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('build-log').textContent = JSON.stringify(data, null, 2);
+        const d = new Date(data.generatedAt);
+        const minAgo = Math.round((Date.now() - d) / 60000);
+        document.getElementById('status').innerHTML = `
+          <strong>✅ Feed activo</strong><br>
+          Última actualización: <strong>${minAgo} min atrás</strong> (${d.toLocaleString('es-ES')})<br>
+          Artículos en el feed: <strong>${data.itemsInFeed}</strong> |
+          Más reciente: <strong>${new Date(data.newestItem).toLocaleString('es-ES')}</strong>
+        `;
+      })
+      .catch(() => {
+        document.getElementById('status').innerHTML = '<strong>⚠️ No se ha generado el feed todavía</strong>';
+        document.getElementById('build-log').textContent = 'Sin datos';
+      });
+  </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "md-showcase-feed",
+  "version": "1.0.0",
+  "description": "Feed RSS automatizado para Google News Showcase — Mundo Deportivo",
+  "type": "module",
+  "scripts": {
+    "generate": "node scripts/generate-showcase-feed.js",
+    "build": "node scripts/generate-showcase-feed.js",
+    "dev": "node scripts/generate-showcase-feed.js && echo 'Feed en public/showcase-feed.xml'"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.3.6",
+    "node-fetch": "^3.3.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
