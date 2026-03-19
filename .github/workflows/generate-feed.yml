@@ -1,58 +1,8 @@
-name: Generar Feed Google News Showcase
-
+name: Placeholder
 on:
-  # Cron cada 15 min como fallback (GitHub Actions mínimo granularity)
-  schedule:
-    - cron: '*/15 * * * *'
-
-  # En cada push a main (para actualizaciones de config)
-  push:
-    branches: [main]
-
-  # Dispatch manual desde la UI de GitHub
   workflow_dispatch:
-
 jobs:
-  generate-feed:
+  noop:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Instalar dependencias
-        run: npm ci
-
-      - name: Generar feed Showcase
-        run: npm run generate
-
-      - name: Commit y push si hay cambios
-        run: |
-          git config user.name "Showcase Feed Bot"
-          git config user.email "bot@mundodeportivo.com"
-          git add public/showcase-feed.xml public/last-build.json
-          # Solo hace commit si hay cambios reales
-          git diff --cached --quiet || (
-            git commit -m "🔄 Feed actualizado: $(date -u '+%Y-%m-%d %H:%M UTC') [$(cat public/last-build.json | python3 -c 'import sys,json; d=json.load(sys.stdin); print(f\"{d[\"itemsInFeed\"]} artículos\")'  2>/dev/null || echo 'N artículos')]"
-            git push
-          )
-
-      - name: Resumen del build
-        if: always()
-        run: |
-          if [ -f public/last-build.json ]; then
-            echo "### 📊 Feed Showcase generado" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo '```json' >> $GITHUB_STEP_SUMMARY
-            cat public/last-build.json >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-          fi
+      - run: echo "Feed servido por serverless function"
