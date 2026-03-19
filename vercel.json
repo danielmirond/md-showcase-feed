@@ -1,38 +1,11 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
-  "outputDirectory": "public",
-  "installCommand": "npm ci",
-  "headers": [
-    {
-      "source": "/showcase-feed.xml",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/rss+xml; charset=UTF-8"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=900, stale-while-revalidate=1800"
-        },
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        }
-      ]
-    },
-    {
-      "source": "/last-build.json",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/json; charset=UTF-8"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=300"
-        }
-      ]
+  "functions": {
+    "api/showcase-feed.js": {
+      "maxDuration": 15
     }
+  },
+  "rewrites": [
+    { "source": "/showcase-feed.xml", "destination": "/api/showcase-feed" }
   ]
 }
