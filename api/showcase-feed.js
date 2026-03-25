@@ -1,19 +1,68 @@
 const RSS_URL = 'https://www.mundodeportivo.com/feed/rss/home';
 
+const ALLOWED_SECTIONS = [
+  '/actualidad/',
+  '/elotromundo/',
+  '/pulso/',
+  '/tressesenta/',
+  '/foodie/',
+  '/futbol/fc-barcelona/',
+  '/futbol/real-madrid/',
+  '/tenis/',
+];
+
+const MAX_ITEMS = 50;
+const BULLET_MAX = 118;
+const TITLE_MAX = 70;
+
 function esc(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function trunc(s, n) {
+function safeTrunc(s, n) {
   s = String(s || '').trim();
-  return s.length > n ? s.slice(0, n - 1) + '...' : s;
+  if (s.length <= n) return s;
+  const cut = s.slice(0, n - 3);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > 20 ? cut.slice(0, lastSpace) : cut) + '...';
+}
+
+function truncTitle(s, n) {
+  s = String(s || '').trim();
+  if (s.length <= n) return s;
+
+  let cut = s.slice(0, n);
+
+  // Cortar en punto logico: preferir : luego , luego espacio
+  const colonIdx = cut.lastIndexOf(':');
+  const commaIdx = cut.lastIndexOf(',');
+  const spaceIdx = cut.lastIndexOf(' ');
+
+  let cutIdx = spaceIdx;
+  if (colonIdx > n * 0.5) cutIdx = colonIdx;
+  else if (commaIdx > n * 0.5) cutIdx = commaIdx;
+
+  cut = s.slice(0, cutIdx).trim();
+
+  // Solo añadir ... si hay comillas abiertas que no se pueden cerrar
+  const openDouble = (cut.match(/"/g) || []).length % 2 !== 0;
+  const openSingle = (cut.match(/'/g) || []).length % 2 !== 0;
+
+  if (openDouble) return cut + '"...';
+  if (openSingle) return cut + "'...";
+
+  // Sin comillas abiertas: cortar limpio sin puntos suspensivos
+  return cut;
 }
 
 function cleanText(s) {
   return String(s || '')
     .replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#039;/g, "'")
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
-    .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/wf_cms\.rss\.read_more/gi, '')
+    .replace(/read_more/gi, '')
+    .replace(/\s+/g, ' ').trim();
 }
 
 function parseDate(s) {
@@ -21,72 +70,142 @@ function parseDate(s) {
   return isNaN(d.getTime()) ? new Date() : d;
 }
 
-function makeBullets(description, title, category) {
-  const cleanTitle = cleanText(title);
-  const cleanDesc = cleanText(description);
-  const cleanCat = cleanText(category);
-
-  if (cleanDesc.length > 30) {
-    const sentences = cleanDesc.match(/[^.!?]{10,}[.!?]+/g) || [];
-    const b1 = trunc(sentences[0] || cleanTitle, 86);
-    const b2 = trunc(sentences[1] || cleanTitle, 86);
-    const b3 = trunc(sentences[2] || cleanTitle, 86);
-    return [b1, b2, b3];
-  }
-
-  const words = cleanTitle.split(' ');
-  const half = Math.ceil(words.length / 2);
-  const b1 = trunc(cleanTitle, 86);
-  const b2 = trunc((cleanCat ? cleanCat + ': ' : '') + cleanTitle, 86);
-  const b3 = trunc(words.slice(0, half).join(' ') + '...', 86);
-  return [b1, b2, b3];
-}
-
-function getTag(block, tag) {
-  const cd = block.match(new RegExp('<' + tag + '[^>]*>\\s*<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>\\s*<\\/' + tag + '>', 'i'));
-  if (cd) return cd[1].trim();
-  const tx = block.match(new RegExp('<' + tag + '[^>]*>([\\s\\S]*?)<\\/' + tag + '>', 'i'));
-  if (tx) return tx[1].trim();
+function getSectionLabel(url) {
+  if (url.includes('/futbol/fc-barcelona/')) return 'FC Barcelona';
+  if (url.includes('/futbol/real-madrid/')) return 'Real Madrid';
+  if (url.includes('/actualidad/')) return 'Actualidad';
+  if (url.includes('/elotromundo/')) return 'El Otro Mundo';
+  if (url.includes('/pulso/')) return 'Pulso';
+  if (url.includes('/tressesenta/')) return 'Tres Sesenta';
+  if (url.includes('/foodie/')) return 'Foodie';
+  if (url.includes('/tenis/')) return 'Tenis';
   return '';
 }
 
-function getAttr(block, tag, attr) {
-  const r = block.match(new RegExp('<' + tag + '[^>]+' + attr + '=["\']([^"\']+)["\']', 'i'));
-  return r ? r[1].trim() : '';
+function fallbackBullet(category) {
+  if (!category) return 'Si te ha interesado, consulta las últimas noticias en Mundo Deportivo.';
+  return 'Si te ha interesado, consulta las últimas noticias de ' + category + ' en Mundo Deportivo.';
+}
+
+function extractSentences(text) {
+  // Split por puntuación seguida de espacio
+  const parts = text.split(/(?<=[.!?])\s+/);
+  const sentences = [];
+  for (var i = 0; i < parts.length; i++) {
+    const s = parts[i].trim();
+    if (s.length < 25) continue;
+    // Descartar frases en mayusculas (artefactos CMS)
+    if (s === s.toUpperCase()) continue;
+    // Descartar frases con comillas desbalanceadas (fragmentos de cita)
+    const dq = (s.match(/"/g) || []).length;
+    const sq = (s.match(/’|“|”/g) || []).length;
+    if (dq % 2 !== 0) continue;
+    // Si la frase cabe completa, incluirla; si no, descartarla
+    if (s.length <= BULLET_MAX) {
+      sentences.push(s);
+    }
+  }
+  return sentences;
+}
+
+function makeBullets(description, title, category) {
+  const cleanCat = category || '';
+  const text = cleanText(description);
+
+  const seen = new Set();
+  seen.add(cleanText(title).toLowerCase().slice(0, 25));
+
+  const unique = [];
+
+  if (text.length > 10) {
+    const sentences = extractSentences(text);
+    for (var i = 0; i < sentences.length; i++) {
+      const s = sentences[i];
+      if (s.length < 25) continue;
+      // Descartar frases en mayusculas (artefactos del CMS)
+      if (s === s.toUpperCase()) continue;
+      const key = s.toLowerCase().slice(0, 25);
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(s);
+      }
+      if (unique.length === 3) break;
+    }
+  }
+
+  if (unique.length === 3) return unique;
+  if (unique.length === 2) return unique;
+
+  // Siempre garantizar mínimo 2 bullets
+  const editorial = fallbackBullet(cleanCat);
+
+  if (unique.length === 1) {
+    unique.push(editorial);
+    return unique;
+  }
+
+  return [editorial];
 }
 
 function parseItems(xml) {
   const items = [];
-  const re = /<item>([\s\S]*?)<\/item>/gi;
+  const normalized = xml.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const itemRe = /<item>([\s\S]*?)<\/item>/g;
   let m;
-  while ((m = re.exec(xml)) !== null) {
-    const b = m[1];
-    let image = getAttr(b, 'media:content', 'url') || getAttr(b, 'media:thumbnail', 'url');
+
+  while ((m = itemRe.exec(normalized)) !== null) {
+    const block = m[1];
+
+    const getVal = function(tag) {
+      const cdRe = new RegExp('<' + tag + '[^>]*>\\s*<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>\\s*<\\/' + tag + '>', 'i');
+      const cd = block.match(cdRe);
+      if (cd) return cd[1].trim();
+      const txRe = new RegExp('<' + tag + '[^>]*>([\\s\\S]*?)<\\/' + tag + '>', 'i');
+      const tx = block.match(txRe);
+      if (tx) return tx[1].trim();
+      return '';
+    };
+
+    const getAttrVal = function(tag, attr) {
+      const r = block.match(new RegExp('<' + tag + '[^>]+' + attr + '=["\']([^"\']+)["\']', 'i'));
+      return r ? r[1].trim() : '';
+    };
+
+    const link = getVal('link') || getVal('guid');
+    const title = getVal('title');
+    if (!link || !title) continue;
+
+    const inSection = ALLOWED_SECTIONS.some(function(s) { return link.includes(s); });
+    if (!inSection) continue;
+
+    let image = getAttrVal('media:content', 'url') || getAttrVal('media:thumbnail', 'url');
     if (!image) {
-      const enc = b.match(/<enclosure[^>]+url=["']([^"']+)["'][^>]*type=["']image/i) ||
-                  b.match(/<enclosure[^>]+type=["']image[^"']*["'][^>]+url=["']([^"']+)["']/i);
+      const enc = block.match(/<enclosure[^>]+url=["']([^"']+)["'][^>]*type=["']image/i) ||
+                  block.match(/<enclosure[^>]+type=["']image[^"']*["'][^>]+url=["']([^"']+)["']/i);
       if (enc) image = enc[1];
     }
-    const link = getTag(b, 'link') || getTag(b, 'guid');
-    const title = getTag(b, 'title');
-    if (!link || !title) continue;
-    const description = getTag(b, 'description') || getTag(b, 'content:encoded') || '';
+
+    const description = getVal('description') || '';
+
     items.push({
       guid: link,
       title: cleanText(title),
       link: link,
-      pubDate: parseDate(getTag(b, 'pubDate') || getTag(b, 'dc:date')),
-      category: cleanText(getTag(b, 'category')),
+      pubDate: parseDate(getVal('pubDate') || getVal('dc:date')),
+      category: getSectionLabel(link),
       description: description,
       image: image,
     });
+
+    if (items.length >= MAX_ITEMS) break;
   }
+
   return items;
 }
 
 function buildFeed(items) {
-  const panels = items.slice(0, 50).map(function(item, idx) {
-    const overline = item.category ? trunc(item.category, 30) : '';
+  const panels = items.map(function(item, idx) {
+    const overline = item.category ? item.category.slice(0, 30) : '';
     const overlineTag = overline ? '<g:overline>' + esc(overline) + '</g:overline>' : '';
     const imageTag = item.image ? '<media:content url="' + esc(item.image) + '" medium="image"/>' : '';
     const bullets = makeBullets(item.description, item.title, item.category);
@@ -101,7 +220,7 @@ function buildFeed(items) {
       '    <atom:updated>' + item.pubDate.toISOString() + '</atom:updated>\n' +
       '    <g:panel type="SINGLE_STORY">Panel ' + (idx + 1) + '</g:panel>\n' +
       (overlineTag ? '    ' + overlineTag + '\n' : '') +
-      '    <title>' + esc(trunc(item.title, 86)) + '</title>\n' +
+      '    <title>' + esc(truncTitle(item.title, TITLE_MAX)) + '</title>\n' +
       '    <link>' + esc(item.link) + '</link>\n' +
       (imageTag ? '    ' + imageTag + '\n' : '') +
       bulletList + '\n' +
@@ -139,7 +258,7 @@ export default async function handler(req, res) {
     const items = parseItems(xml);
     if (!items.length) throw new Error('Sin articulos');
     res.setHeader('Content-Type', 'application/rss+xml; charset=UTF-8');
-    res.setHeader('Cache-Control', 'public, max-age=1200, stale-while-revalidate=2400');
+    res.setHeader('Cache-Control', 'public, max-age=900, stale-while-revalidate=1800');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.status(200).send(buildFeed(items));
   } catch (err) {
