@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "generate": "node scripts/generate-showcase-feed.js",
-    "build": "node scripts/generate-showcase-feed.js",
+    "build": "echo 'Feed se genera on-demand en /api/showcase-feed — sin build estático'",
     "dev": "node scripts/generate-showcase-feed.js && echo 'Feed en public/showcase-feed.xml'"
   },
   "dependencies": {
