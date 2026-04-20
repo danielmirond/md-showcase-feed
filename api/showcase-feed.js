@@ -12,7 +12,7 @@ const ALLOWED_SECTIONS = [
 ];
 
 const MAX_ITEMS = 50;
-const BULLET_MAX = 118;
+const BULLET_MAX = 160;
 const TITLE_MAX = 70;
 
 function esc(s) {
@@ -62,6 +62,8 @@ function cleanText(s) {
     .replace(/<[^>]+>/g, ' ')
     .replace(/wf_cms\.rss\.read_more/gi, '')
     .replace(/read_more/gi, '')
+    .replace(/\bLeer más\b/gi, '')
+    .replace(/\bRead more\b/gi, '')
     .replace(/\s+/g, ' ').trim();
 }
 
@@ -194,7 +196,8 @@ function parseItems(xml) {
       if (enc) image = enc[1];
     }
 
-    const description = getVal('description') || '';
+    // Preferir content:encoded (cuerpo más largo) sobre description
+    const description = getVal('content:encoded') || getVal('description') || '';
 
     items.push({
       guid: link,
