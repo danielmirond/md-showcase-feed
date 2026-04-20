@@ -81,19 +81,6 @@ function getSectionLabel(url) {
   return '';
 }
 
-function fallbackBullets(category) {
-  if (!category) {
-    return [
-      'Mundo Deportivo ofrece la última hora y análisis de la actualidad deportiva.',
-      'Consulta la cobertura completa con crónicas, reportajes y opinión de nuestros redactores.',
-    ];
-  }
-  return [
-    'Sigue toda la actualidad de ' + category + ' con la cobertura de Mundo Deportivo.',
-    'Crónicas, análisis y reacciones firmadas por nuestros redactores especializados.',
-  ];
-}
-
 function escLen(s) { return esc(s).length; }
 
 function fitBullet(s, n) {
@@ -132,43 +119,29 @@ function extractSentences(text) {
   return sentences;
 }
 
-function makeBullets(description, title, category) {
-  const cleanCat = category || '';
+function makeBullets(description, title) {
   const text = cleanText(description);
+  if (text.length <= 10) return null;
 
   const seen = new Set();
   seen.add(cleanText(title).toLowerCase().slice(0, 25));
 
   const unique = [];
-
-  if (text.length > 10) {
-    const sentences = extractSentences(text);
-    for (var i = 0; i < sentences.length; i++) {
-      const s = sentences[i];
-      if (s.length < 25) continue;
-      // Descartar frases en mayusculas (artefactos del CMS)
-      if (s === s.toUpperCase()) continue;
-      const key = s.toLowerCase().slice(0, 25);
-      if (!seen.has(key)) {
-        seen.add(key);
-        unique.push(s);
-      }
-      if (unique.length === 3) break;
+  const sentences = extractSentences(text);
+  for (var i = 0; i < sentences.length; i++) {
+    const s = sentences[i];
+    if (s.length < 25) continue;
+    if (s === s.toUpperCase()) continue;
+    const key = s.toLowerCase().slice(0, 25);
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(s);
     }
+    if (unique.length === 3) break;
   }
 
-  if (unique.length >= 2) return unique;
-
-  // Garantizar minimo 2 bullets (requisito Google News Showcase)
-  const fb = fallbackBullets(cleanCat);
-  while (unique.length < 2) {
-    const next = fb.shift();
-    if (!next) break;
-    const key = next.toLowerCase().slice(0, 25);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(next);
-  }
+  // Sin fallbacks: si no hay ≥2 bullets reales, descartar item
+  if (unique.length < 2) return null;
   return unique;
 }
 
@@ -230,12 +203,18 @@ function parseItems(xml) {
 }
 
 function buildFeed(items) {
-  const panels = items.map(function(item, idx) {
+  const enriched = items
+    .map(function(item) {
+      const bullets = makeBullets(item.description, item.title);
+      return bullets ? Object.assign({}, item, { bullets: bullets }) : null;
+    })
+    .filter(Boolean);
+
+  const panels = enriched.map(function(item, idx) {
     const overline = item.category ? item.category.slice(0, 30) : '';
     const overlineTag = overline ? '<g:overline>' + esc(overline) + '</g:overline>' : '';
     const imageTag = item.image ? '<media:content url="' + esc(item.image) + '" medium="image"/>' : '';
-    const bullets = makeBullets(item.description, item.title, item.category);
-    const bulletTags = bullets.map(function(b) {
+    const bulletTags = item.bullets.map(function(b) {
       return '      <g:list_item>' + esc(b) + '</g:list_item>';
     }).join('\n');
     const bulletList = '    <g:bullet_list>\n' + bulletTags + '\n    </g:bullet_list>';
