@@ -82,9 +82,17 @@ function getSectionLabel(url) {
   return '';
 }
 
-function fallbackBullet(category) {
-  if (!category) return 'Si te ha interesado, consulta las últimas noticias en Mundo Deportivo.';
-  return 'Si te ha interesado, consulta las últimas noticias de ' + category + ' en Mundo Deportivo.';
+function fallbackBullets(category) {
+  if (!category) {
+    return [
+      'Mundo Deportivo ofrece la última hora y análisis de la actualidad deportiva.',
+      'Consulta la cobertura completa con crónicas, reportajes y opinión de nuestros redactores.',
+    ];
+  }
+  return [
+    'Sigue toda la actualidad de ' + category + ' con la cobertura de Mundo Deportivo.',
+    'Crónicas, análisis y reacciones firmadas por nuestros redactores especializados.',
+  ];
 }
 
 function extractSentences(text) {
@@ -133,18 +141,19 @@ function makeBullets(description, title, category) {
     }
   }
 
-  if (unique.length === 3) return unique;
-  if (unique.length === 2) return unique;
+  if (unique.length >= 2) return unique;
 
-  // Siempre garantizar mínimo 2 bullets
-  const editorial = fallbackBullet(cleanCat);
-
-  if (unique.length === 1) {
-    unique.push(editorial);
-    return unique;
+  // Garantizar minimo 2 bullets (requisito Google News Showcase)
+  const fb = fallbackBullets(cleanCat);
+  while (unique.length < 2) {
+    const next = fb.shift();
+    if (!next) break;
+    const key = next.toLowerCase().slice(0, 25);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(next);
   }
-
-  return [editorial];
+  return unique;
 }
 
 function parseItems(xml) {
