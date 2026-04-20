@@ -12,7 +12,7 @@ const ALLOWED_SECTIONS = [
 ];
 
 const MAX_ITEMS = 50;
-const BULLET_MAX = 160;
+const BULLET_MAX = 118;
 const TITLE_MAX = 70;
 
 function esc(s) {
@@ -97,22 +97,39 @@ function fallbackBullets(category) {
   ];
 }
 
+function escLen(s) { return esc(s).length; }
+
+function fitBullet(s, n) {
+  if (escLen(s) <= n) return s;
+  // Truncar en límite logico: ; , luego espacio — siempre dentro de n-1 para dejar sitio al punto
+  const cut = s.slice(0, n - 1);
+  const semi = cut.lastIndexOf(';');
+  const comma = cut.lastIndexOf(',');
+  const space = cut.lastIndexOf(' ');
+  let idx = space;
+  if (semi > n * 0.5) idx = semi;
+  else if (comma > n * 0.5) idx = comma;
+  if (idx < 30) return null; // no hay punto de corte razonable
+  let out = s.slice(0, idx).replace(/[,;:\s]+$/, '').trim();
+  // Terminar con punto si no hay puntuación final
+  if (!/[.!?]$/.test(out)) out += '.';
+  return escLen(out) <= n ? out : fitBullet(out, n - 5);
+}
+
 function extractSentences(text) {
-  // Split por puntuación seguida de espacio
   const parts = text.split(/(?<=[.!?])\s+/);
   const sentences = [];
   for (var i = 0; i < parts.length; i++) {
     const s = parts[i].trim();
     if (s.length < 25) continue;
-    // Descartar frases en mayusculas (artefactos CMS)
     if (s === s.toUpperCase()) continue;
-    // Descartar frases con comillas desbalanceadas (fragmentos de cita)
     const dq = (s.match(/"/g) || []).length;
-    const sq = (s.match(/’|“|”/g) || []).length;
     if (dq % 2 !== 0) continue;
-    // Si la frase cabe completa, incluirla; si no, descartarla
-    if (s.length <= BULLET_MAX) {
+    if (escLen(s) <= BULLET_MAX) {
       sentences.push(s);
+    } else {
+      const fit = fitBullet(s, BULLET_MAX);
+      if (fit) sentences.push(fit);
     }
   }
   return sentences;
