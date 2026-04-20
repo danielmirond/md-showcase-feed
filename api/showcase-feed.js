@@ -29,30 +29,27 @@ function safeTrunc(s, n) {
 
 function truncTitle(s, n) {
   s = String(s || '').trim();
-  if (s.length <= n) return s;
+  if (esc(s).length <= n) return s;
 
-  let cut = s.slice(0, n);
-
-  // Cortar en punto logico: preferir : luego , luego espacio
-  const colonIdx = cut.lastIndexOf(':');
-  const commaIdx = cut.lastIndexOf(',');
-  const spaceIdx = cut.lastIndexOf(' ');
-
-  let cutIdx = spaceIdx;
-  if (colonIdx > n * 0.5) cutIdx = colonIdx;
-  else if (commaIdx > n * 0.5) cutIdx = commaIdx;
-
-  cut = s.slice(0, cutIdx).trim();
-
-  // Solo añadir ... si hay comillas abiertas que no se pueden cerrar
-  const openDouble = (cut.match(/"/g) || []).length % 2 !== 0;
-  const openSingle = (cut.match(/'/g) || []).length % 2 !== 0;
-
-  if (openDouble) return cut + '"...';
-  if (openSingle) return cut + "'...";
-
-  // Sin comillas abiertas: cortar limpio sin puntos suspensivos
-  return cut;
+  // Presupuesto real en chars crudos: cada " cuenta 6 escapado, 1 crudo.
+  // Iterar reduciendo hasta que esc(candidate).length <= n
+  for (let budget = n; budget >= 20; budget--) {
+    let cut = s.slice(0, budget);
+    const colonIdx = cut.lastIndexOf(':');
+    const commaIdx = cut.lastIndexOf(',');
+    const spaceIdx = cut.lastIndexOf(' ');
+    let cutIdx = spaceIdx;
+    if (colonIdx > budget * 0.5) cutIdx = colonIdx;
+    else if (commaIdx > budget * 0.5) cutIdx = commaIdx;
+    if (cutIdx < 15) continue;
+    cut = s.slice(0, cutIdx).replace(/[,;:\s"']+$/, '').trim();
+    // Balancear comillas: si quedan impares, descartar esta opción y acortar más
+    const dq = (cut.match(/"/g) || []).length;
+    if (dq % 2 !== 0) continue;
+    if (esc(cut).length <= n) return cut;
+  }
+  // Fallback duro: recortar a ojo y quitar comillas abiertas
+  return s.slice(0, Math.min(n, 50)).replace(/"/g, '').trim();
 }
 
 function cleanText(s) {
