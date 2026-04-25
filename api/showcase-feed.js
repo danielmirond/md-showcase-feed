@@ -13,7 +13,6 @@ const ALLOWED_SECTIONS = [
 
 const MAX_ITEMS = 50;
 const BULLET_MAX = 118;
-const TITLE_MAX = 70;
 
 function esc(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -25,31 +24,6 @@ function safeTrunc(s, n) {
   const cut = s.slice(0, n - 3);
   const lastSpace = cut.lastIndexOf(' ');
   return (lastSpace > 20 ? cut.slice(0, lastSpace) : cut) + '...';
-}
-
-function truncTitle(s, n) {
-  s = String(s || '').trim();
-  if (esc(s).length <= n) return s;
-
-  // Presupuesto real en chars crudos: cada " cuenta 6 escapado, 1 crudo.
-  // Iterar reduciendo hasta que esc(candidate).length <= n
-  for (let budget = n; budget >= 20; budget--) {
-    let cut = s.slice(0, budget);
-    const colonIdx = cut.lastIndexOf(':');
-    const commaIdx = cut.lastIndexOf(',');
-    const spaceIdx = cut.lastIndexOf(' ');
-    let cutIdx = spaceIdx;
-    if (colonIdx > budget * 0.5) cutIdx = colonIdx;
-    else if (commaIdx > budget * 0.5) cutIdx = commaIdx;
-    if (cutIdx < 15) continue;
-    cut = s.slice(0, cutIdx).replace(/[,;:\s"']+$/, '').trim();
-    // Balancear comillas: si quedan impares, descartar esta opción y acortar más
-    const dq = (cut.match(/"/g) || []).length;
-    if (dq % 2 !== 0) continue;
-    if (esc(cut).length <= n) return cut;
-  }
-  // Fallback duro: recortar a ojo y quitar comillas abiertas
-  return s.slice(0, Math.min(n, 50)).replace(/"/g, '').trim();
 }
 
 function cleanText(s) {
@@ -225,7 +199,7 @@ function buildFeed(items) {
       '    <atom:updated>' + item.pubDate.toISOString() + '</atom:updated>\n' +
       '    <g:panel type="SINGLE_STORY">Panel ' + (idx + 1) + '</g:panel>\n' +
       (overlineTag ? '    ' + overlineTag + '\n' : '') +
-      '    <title>' + esc(truncTitle(item.title, TITLE_MAX)) + '</title>\n' +
+      '    <title>' + esc(item.title) + '</title>\n' +
       '    <link>' + esc(item.link) + '</link>\n' +
       (imageTag ? '    ' + imageTag + '\n' : '') +
       bulletList + '\n' +
