@@ -12,10 +12,27 @@ const ALLOWED_SECTIONS = [
 ];
 
 const MAX_ITEMS = 50;
-const BULLET_MAX = 118;
+const BULLET_MAX = 86;
+const TITLE_MAX = 200;
 
 function esc(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function safeTitle(s, n) {
+  s = String(s || '').trim();
+  if (esc(s).length <= n) return s;
+  // Recortar respetando límite escapado y balanceando comillas
+  for (let budget = Math.min(n, s.length); budget >= 30; budget--) {
+    let cut = s.slice(0, budget);
+    const space = cut.lastIndexOf(' ');
+    if (space < 20) continue;
+    cut = s.slice(0, space).replace(/[,;:\s"']+$/, '').trim();
+    const dq = (cut.match(/"/g) || []).length;
+    if (dq % 2 !== 0) continue;
+    if (esc(cut).length <= n) return cut;
+  }
+  return s.slice(0, 100).replace(/"/g, '').trim();
 }
 
 function safeTrunc(s, n) {
@@ -199,7 +216,7 @@ function buildFeed(items) {
       '    <atom:updated>' + item.pubDate.toISOString() + '</atom:updated>\n' +
       '    <g:panel type="SINGLE_STORY">Panel ' + (idx + 1) + '</g:panel>\n' +
       (overlineTag ? '    ' + overlineTag + '\n' : '') +
-      '    <title>' + esc(item.title) + '</title>\n' +
+      '    <title>' + esc(safeTitle(item.title, TITLE_MAX)) + '</title>\n' +
       '    <link>' + esc(item.link) + '</link>\n' +
       (imageTag ? '    ' + imageTag + '\n' : '') +
       bulletList + '\n' +
